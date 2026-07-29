@@ -494,12 +494,20 @@ public class MainActivity extends Activity {
 
     private void startServerScanner() {
         scannerMode = SCAN_MODE_SERVER;
-        startScannerWithPermission();
+        startEmbeddedScannerWithPermission();
     }
 
     private void startWebScanner() {
         scannerMode = SCAN_MODE_WEB;
-        startScannerWithPermission();
+        startEmbeddedScannerWithPermission();
+    }
+
+    private void startEmbeddedScannerWithPermission() {
+        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_SCAN_CAMERA);
+            return;
+        }
+        startEmbeddedScanner();
     }
 
     private void startEmbeddedScanner() {
@@ -860,7 +868,7 @@ public class MainActivity extends Activity {
         }
         if (requestCode == REQ_SCAN_CAMERA) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                showScannerView();
+                startEmbeddedScanner();
             } else {
                 Toast.makeText(this, "没有摄像头权限，无法扫码", Toast.LENGTH_LONG).show();
             }
