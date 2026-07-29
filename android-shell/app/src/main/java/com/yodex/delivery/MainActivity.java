@@ -494,12 +494,12 @@ public class MainActivity extends Activity {
 
     private void startServerScanner() {
         scannerMode = SCAN_MODE_SERVER;
-        startEmbeddedScanner();
+        startScannerWithPermission();
     }
 
     private void startWebScanner() {
         scannerMode = SCAN_MODE_WEB;
-        startEmbeddedScanner();
+        startScannerWithPermission();
     }
 
     private void startEmbeddedScanner() {
@@ -589,7 +589,7 @@ public class MainActivity extends Activity {
     private void cancelScanner() {
         stopScanner();
         if (scannerMode == SCAN_MODE_WEB && webView != null) {
-            setContentView(webView);
+            restoreWebContent();
             return;
         }
         showServerSetup(serverInput == null ? lastServerUrl : serverInput.getText().toString());
@@ -773,7 +773,7 @@ public class MainActivity extends Activity {
         runOnUiThread(() -> {
             stopScanner();
             if (scannerMode == SCAN_MODE_WEB && webView != null) {
-                setContentView(webView);
+                restoreWebContent();
                 dispatchWebScanResult(value);
                 return;
             }
@@ -787,6 +787,14 @@ public class MainActivity extends Activity {
                 showServerSetup(value);
             }
         });
+    }
+
+    private void restoreWebContent() {
+        if (swipeRefreshLayout != null) {
+            setContentView(swipeRefreshLayout);
+        } else if (webView != null) {
+            setContentView(webView);
+        }
     }
 
     private void stopScanner() {
