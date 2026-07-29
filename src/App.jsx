@@ -162,6 +162,7 @@ function App() {
   const [page, setPage] = useState(operator ? 'list' : 'login')
   const [deliveries, setDeliveries] = useState([])
   const [activeDelivery, setActiveDelivery] = useState(null)
+  const [searchText, setSearchText] = useState('')
   const [keyword, setKeyword] = useState('')
   const [routeFilter, setRouteFilter] = useState(['全部'])
   const [routeOptions, setRouteOptions] = useState([allRouteOption])
@@ -256,6 +257,7 @@ function App() {
     window.__yodexNativeScanResult = code => {
       const value = String(code || '').trim()
       if (!value) return
+      setSearchText(value)
       setKeyword(value)
       setScannerVisible(false)
       Toast.show('已识别单号')
@@ -377,13 +379,14 @@ function App() {
           rows={deliveries}
           loading={loading}
           todayCompletedCount={todayCompletedCount}
-          keyword={keyword}
+          searchText={searchText}
           routeFilter={routeFilter}
           routeOptions={routeOptions}
           dateRange={dateRange}
           datePreset={datePreset}
           statusFilter={statusFilter}
-          onKeyword={setKeyword}
+          onKeyword={setSearchText}
+          onSearch={value => setKeyword(String(value || '').trim())}
           onRouteFilter={setRouteFilter}
           onStatusFilter={setStatusFilter}
           onDatePreset={value => {
@@ -473,13 +476,14 @@ function DeliveryListPage(props) {
     rows,
     loading,
     todayCompletedCount,
-    keyword,
+    searchText,
     routeFilter,
     routeOptions,
     dateRange,
     datePreset,
     statusFilter,
     onKeyword,
+    onSearch,
     onRouteFilter,
     onStatusFilter,
     onDatePreset,
@@ -517,7 +521,13 @@ function DeliveryListPage(props) {
 
       <div className="list-sticky-area">
         <div className="delivery-tools">
-          <SearchBar value={keyword} onChange={onKeyword} placeholder="搜索单号 / 客户名称" />
+          <SearchBar
+            value={searchText}
+            onChange={onKeyword}
+            onSearch={onSearch}
+            onClear={() => onSearch('')}
+            placeholder="搜索单号 / 客户名称"
+          />
           <Button fill="outline" color="primary" className="scan-button" onClick={onOpenScanner}><ScanCodeOutline /></Button>
         </div>
         <Dropdown ref={dropdownRef} className="filter-dropdown" closeOnMaskClick closeOnClickAway>

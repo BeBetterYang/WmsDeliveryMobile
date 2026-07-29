@@ -44,6 +44,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.core.content.FileProvider;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.BinaryBitmap;
@@ -76,6 +77,7 @@ public class MainActivity extends Activity {
 
     private SharedPreferences prefs;
     private WebView webView;
+    private SwipeRefreshLayout swipeRefreshLayout;
     private EditText serverInput;
     private PermissionRequest pendingPermissionRequest;
     private ValueCallback<Uri[]> filePathCallback;
@@ -247,8 +249,23 @@ public class MainActivity extends Activity {
     private void openWeb(String url) {
         stopScanner();
         lastServerUrl = url;
+        swipeRefreshLayout = new SwipeRefreshLayout(this);
         webView = new WebView(this);
-        setContentView(webView);
+        swipeRefreshLayout.addView(webView, new SwipeRefreshLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+        swipeRefreshLayout.setColorSchemeColors(Color.rgb(22, 119, 255));
+        swipeRefreshLayout.setOnRefreshListener(() -> {
+            if (webView != null) {
+                webView.reload();
+            } else {
+                swipeRefreshLayout.setRefreshing(false);
+            }
+        });
+        swipeRefreshLayout.setOnChildScrollUpCallback((parent, child) ->
+                webView != null && webView.getScrollY() > 0);
+        setContentView(swipeRefreshLayout);
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -273,6 +290,7 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
+                if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
                 installNativeScannerHook(view);
             }
 
@@ -280,6 +298,7 @@ public class MainActivity extends Activity {
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 super.onReceivedError(view, request, error);
                 if (request != null && request.isForMainFrame()) {
+                    if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
                     Toast.makeText(MainActivity.this, "无法连接服务器，请检查地址", Toast.LENGTH_LONG).show();
                     showServerSetup(lastServerUrl);
                 }
