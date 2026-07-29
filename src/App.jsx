@@ -58,7 +58,7 @@ const dateRangePresets = [
   { label: '近7天', value: 'last7', range: () => [formatDate(addDays(new Date(), -6)), today()] },
 ]
 const statusMeta = status => deliveryStatusOptions.find(item => item.value === status) || deliveryStatusOptions[0]
-const maxImageBytes = 1024 * 1024
+const maxImageBytes = 500 * 1024
 
 const apiBase = window.location.protocol === 'file:' ? 'http://127.0.0.1:5189' : ''
 const api = async (url, options = {}) => {
@@ -121,7 +121,7 @@ const compressImageFile = async (file, fallbackName = 'image.jpg') => {
     let quality = 0.82
     let blob = null
 
-    for (let i = 0; i < 16; i += 1) {
+    for (let i = 0; i < 24; i += 1) {
       canvas.width = Math.max(1, Math.round((img.naturalWidth || img.width) * scale))
       canvas.height = Math.max(1, Math.round((img.naturalHeight || img.height) * scale))
       ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -130,10 +130,10 @@ const compressImageFile = async (file, fallbackName = 'image.jpg') => {
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
       blob = await canvasToBlob(canvas, outputType, quality)
       if (!blob || blob.size <= maxImageBytes) break
-      if (quality > 0.48) {
-        quality -= 0.12
+      if (quality > 0.42) {
+        quality -= 0.1
       } else {
-        scale *= 0.82
+        scale *= 0.78
       }
     }
 
