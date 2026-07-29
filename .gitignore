@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Frontend build output
+dist/
+
+# .NET build output
+bin/
+obj/
+
+# Runtime files
+server.log
+UserData/
+
+# IIS/APK installer build output
+deploy/output/
+deploy/Installer/bin/
+deploy/Installer/obj/
+deploy/Installer/Payload.zip
+
+# Android build output and local SDK config
+android-shell/.gradle/
+android-shell/app/build/
+android-shell/local.properties
+
+# IDE/editor files
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Logs
+*.log
