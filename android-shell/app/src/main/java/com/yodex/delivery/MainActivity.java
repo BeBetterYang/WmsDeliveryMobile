@@ -256,6 +256,7 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT
         ));
         swipeRefreshLayout.setColorSchemeColors(Color.rgb(22, 119, 255));
+        swipeRefreshLayout.setEnabled(false);
         swipeRefreshLayout.setOnRefreshListener(() -> {
             if (webView != null) {
                 webView.reload();
@@ -952,6 +953,17 @@ public class MainActivity extends Activity {
                     fullscreen
                             ? ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
                             : ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED));
+        }
+
+        @JavascriptInterface
+        public void setPullRefreshEnabled(boolean enabled) {
+            runOnUiThread(() -> {
+                if (swipeRefreshLayout == null) return;
+                swipeRefreshLayout.setEnabled(enabled);
+                if (!enabled) {
+                    swipeRefreshLayout.setRefreshing(false);
+                }
+            });
         }
     }
 

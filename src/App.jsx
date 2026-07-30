@@ -284,6 +284,10 @@ function App() {
     }
   }, [page])
 
+  useEffect(() => {
+    window.YodexNative?.setPullRefreshEnabled?.(page === 'list')
+  }, [page])
+
   const openDeliveryDetail = async row => {
     try {
       setLoading(true)
