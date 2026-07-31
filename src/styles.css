@@ -377,6 +377,11 @@ select,
   margin-bottom: 8px;
   border-radius: 8px;
 }
+.carload-panel {
+  position: sticky;
+  top: 45px;
+  z-index: 20;
+}
 .carload-panel .adm-card-body,
 .carload-result-card .adm-card-body {
   padding: 12px;
@@ -469,8 +474,18 @@ select,
   display: grid;
   grid-template-columns: minmax(0, 1fr) 64px;
   gap: 8px;
+  align-items: center;
   padding: 8px 4px;
   background: #f5f5f5;
+}
+.manual-search-row .adm-search-bar {
+  --background: #fff;
+  --border-radius: 6px;
+  border: 1px solid #d9e8ff;
+  border-radius: 6px;
+}
+.manual-search-row .adm-button {
+  height: 44px;
 }
 .manual-option {
   display: grid;
@@ -482,6 +497,9 @@ select,
   color: #172033;
   font-size: 14px;
   font-weight: 750;
+}
+.manual-option .manual-bill-code {
+  font-size: 15px;
 }
 .manual-option span {
   color: #626b7a;
@@ -499,25 +517,9 @@ select,
   margin-top: 4px;
   font-size: 14px;
 }
-.carload-inline-meta {
-  display: grid;
+.carload-contact-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  margin-top: 8px;
-}
-.carload-inline-meta span,
-.carload-inline-meta a {
-  min-width: 0;
-  overflow: hidden;
-  color: #626b7a;
-  font-size: 12px;
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-decoration: none;
-}
-.carload-inline-meta a {
-  color: #1677ff;
+  gap: 8px;
 }
 .carload-bottom-bar {
   bottom: calc(52px + var(--safe-bottom));

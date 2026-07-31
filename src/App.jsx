@@ -752,7 +752,7 @@ function CarLoadPage(props) {
     value: getValue(row, 'id', 'Id'),
     label: (
       <div className="manual-option">
-        <span>{getValue(row, 'billCode', 'BillCode')}</span>
+        <b className="manual-bill-code">{getValue(row, 'billCode', 'BillCode')}</b>
         <b>{getValue(row, 'customerName', 'CustomerName') || '-'}</b>
         <span>{getValue(row, 'address', 'Address') || '-'}</span>
       </div>
@@ -796,12 +796,10 @@ function CarLoadPage(props) {
                 <div className="customer-name carload-customer-name">{getValue(row, 'customerName', 'CustomerName') || '-'}</div>
               </div>
             </div>
-            <div className="carload-inline-meta">
-              <span>联系人：{getValue(row, 'contact', 'Contact') || '-'}</span>
-              <a href={getValue(row, 'phone', 'Phone') ? `tel:${getValue(row, 'phone', 'Phone')}` : undefined} onClick={event => event.stopPropagation()}>
-                手机号：{getValue(row, 'phone', 'Phone') || '-'}
-              </a>
-              <span>线路：{getValue(row, 'routeName', 'RouteName') || '-'}</span>
+            <div className="delivery-grid carload-contact-grid">
+              <Info label="联系人" value={getValue(row, 'contact', 'Contact') || '-'} />
+              <Info label="手机号" value={getValue(row, 'phone', 'Phone') || '-'} href={getValue(row, 'phone', 'Phone') ? `tel:${getValue(row, 'phone', 'Phone')}` : ''} />
+              <Info label="线路" value={getValue(row, 'routeName', 'RouteName') || '-'} />
             </div>
             <div className="delivery-grid carload-meta-grid">
               <Info label="地址" value={getValue(row, 'address', 'Address') || '-'} className="wide" />
