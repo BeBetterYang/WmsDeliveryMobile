@@ -1618,8 +1618,7 @@ static CarLoadSourceBill ReadCarLoadSourceBill(SqlDataReader reader) => new(
         ReadString(reader, "province"),
         ReadString(reader, "city"),
         ReadString(reader, "region"),
-        ReadString(reader, "Area"),
-        ReadString(reader, "TelAndAddress")),
+        ReadString(reader, "Area")),
     ReadString(reader, "Comment"),
     ReadInt(reader, "PackSumQty"),
     ReadInt(reader, "DispatchState"),
@@ -1962,8 +1961,7 @@ static DeliveryDto ReadDelivery(SqlDataReader reader)
         ReadString(reader, "province"),
         ReadString(reader, "city"),
         ReadString(reader, "region"),
-        ReadString(reader, "Area"),
-        ReadString(reader, "TelAndAddress"));
+        ReadString(reader, "Area"));
 
     return new DeliveryDto(
         ReadString(reader, "SourceBillID"),
