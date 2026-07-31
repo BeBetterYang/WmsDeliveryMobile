@@ -93,7 +93,7 @@ const buildAmapUrl = row => {
   if (Number.isFinite(longitude) && Number.isFinite(latitude)) {
     return `intent://navi?sourceApplication=wms-delivery&poiname=${encodeURIComponent(address)}&lat=${latitude}&lon=${longitude}&dev=0&style=2#Intent;scheme=androidamap;package=com.autonavi.minimap;end`
   }
-  return `intent://keywordNavi?sourceApplication=wms-delivery&keyword=${encodeURIComponent(address)}&style=2#Intent;scheme=androidamap;package=com.autonavi.minimap;end`
+  return `intent://poi?sourceApplication=wms-delivery&keywords=${encodeURIComponent(address)}#Intent;scheme=amapuri;package=com.autonavi.minimap;end`
 }
 
 const loadImage = src => new Promise((resolve, reject) => {
