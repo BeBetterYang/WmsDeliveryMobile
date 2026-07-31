@@ -109,10 +109,35 @@ select,
   font-weight: 700;
   line-height: 45px;
 }
+.module-switch {
+  position: sticky;
+  top: 45px;
+  z-index: 25;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fff;
+  border-bottom: 1px solid #eef0f4;
+}
+.module-switch button {
+  height: 34px;
+  border: 1px solid #d9e8ff;
+  border-radius: 6px;
+  background: #f7fbff;
+  color: #4f79ad;
+  font-size: 14px;
+  font-weight: 650;
+}
+.module-switch button.active {
+  border-color: #1677ff;
+  background: #1677ff;
+  color: #fff;
+}
 .sticky-tools,
 .list-sticky-area {
   position: sticky;
-  top: 45px;
+  top: 96px;
   z-index: 20;
   background: #fff;
   border-bottom: 1px solid #eee;
@@ -351,6 +376,44 @@ select,
 }
 .complete-summary {
   margin: 10px 8px 8px;
+}
+.carload-shell {
+  padding-bottom: calc(22px + var(--safe-bottom));
+}
+.carload-panel,
+.carload-result-card {
+  margin-bottom: 8px;
+  border-radius: 8px;
+}
+.carload-panel .adm-card-body,
+.carload-result-card .adm-card-body {
+  padding: 12px;
+}
+.carload-section-label {
+  margin: 14px 0 8px;
+  color: #172033;
+  font-size: 14px;
+  font-weight: 700;
+}
+.carload-section-label:first-child {
+  margin-top: 0;
+}
+.carload-hint {
+  margin-top: 8px;
+  color: #626b7a;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.carload-scan-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.carload-time {
+  padding-top: 10px;
+  border-top: 1px solid #eef0f4;
 }
 .upload-card {
   margin: 8px;

@@ -59,6 +59,8 @@ const dateRangePresets = [
 ]
 const statusMeta = status => deliveryStatusOptions.find(item => item.value === status) || deliveryStatusOptions[0]
 const maxImageBytes = 500 * 1024
+const getValue = (row, ...keys) => keys.map(key => row?.[key]).find(value => value !== undefined && value !== null) ?? ''
+const displayName = operator => operator?.loginName || operator?.login || ''
 
 const apiBase = window.location.protocol === 'file:' ? 'http://127.0.0.1:5189' : ''
 const api = async (url, options = {}) => {
@@ -176,6 +178,14 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [todayCompletedCount, setTodayCompletedCount] = useState(0)
   const deliveryRequestRef = useRef(0)
+  const [module, setModule] = useState('delivery')
+  const [carLoadOptions, setCarLoadOptions] = useState({ cars: [], drivers: [] })
+  const [carLoadBillText, setCarLoadBillText] = useState('')
+  const [carLoadRows, setCarLoadRows] = useState([])
+  const [selectedCarId, setSelectedCarId] = useState('')
+  const [selectedDriverId, setSelectedDriverId] = useState('')
+  const [carLoadLoading, setCarLoadLoading] = useState(false)
+  const scannerTargetRef = useRef('delivery')
 
   const loadDeliveries = useCallback(async (overrides = {}) => {
     if (!operator?.loginID) return
@@ -240,6 +250,81 @@ function App() {
     }
   }, [operator?.loginID])
 
+  const loadCarLoadOptions = useCallback(async () => {
+    if (!operator?.loginID) return
+    try {
+      const options = await api('/api/carload/options')
+      const cars = options?.cars || []
+      const drivers = options?.drivers || []
+      setCarLoadOptions({ cars, drivers })
+
+      setSelectedCarId(current => {
+        if (current && cars.some(car => getValue(car, 'id', 'Id') === current)) return current
+        return getValue(cars[0], 'id', 'Id')
+      })
+      setSelectedDriverId(current => {
+        if (current && drivers.some(driver => getValue(driver, 'id', 'Id') === current)) return current
+        const currentDriver = drivers.find(driver => getValue(driver, 'id', 'Id') === operator.loginID)
+        const firstCarDriver = getValue(cars[0], 'driverID', 'driverId', 'DriverID')
+        const carDriver = drivers.find(driver => getValue(driver, 'id', 'Id') === firstCarDriver)
+        return getValue(currentDriver || carDriver || drivers[0], 'id', 'Id')
+      })
+    } catch (err) {
+      Toast.show({ icon: 'fail', content: err.message })
+    }
+  }, [operator?.loginID])
+
+  const submitCarLoad = useCallback(async (rawBillCode = carLoadBillText) => {
+    const billCode = String(rawBillCode || '').trim()
+    if (!billCode) {
+      Toast.show('请输入或扫描发货单号')
+      return
+    }
+    if (!selectedCarId) {
+      Toast.show('请选择车辆')
+      return
+    }
+    if (!selectedDriverId) {
+      Toast.show('请选择司机')
+      return
+    }
+
+    setCarLoadLoading(true)
+    try {
+      const result = await api('/api/carload/scan', {
+        method: 'POST',
+        body: JSON.stringify({
+          loginId: operator.loginID,
+          billCode,
+          carId: selectedCarId,
+          driverId: selectedDriverId,
+        }),
+      })
+      setCarLoadRows(rows => [result, ...rows].slice(0, 30))
+      setCarLoadBillText('')
+      Toast.show({ icon: 'success', content: '装车成功' })
+      await loadDeliveries()
+    } catch (err) {
+      Toast.show({ icon: 'fail', content: err.message })
+    } finally {
+      setCarLoadLoading(false)
+    }
+  }, [carLoadBillText, loadDeliveries, operator?.loginID, selectedCarId, selectedDriverId])
+
+  const handleScanResult = useCallback(code => {
+    const value = String(code || '').trim()
+    if (!value) return
+    setScannerVisible(false)
+    if (scannerTargetRef.current === 'carload') {
+      setCarLoadBillText(value)
+      submitCarLoad(value)
+      return
+    }
+    setSearchText(value)
+    setKeyword(value)
+    Toast.show('已识别单号')
+  }, [submitCarLoad])
+
   useEffect(() => {
     const timer = window.setTimeout(loadDeliveries, 180)
     return () => window.clearTimeout(timer)
@@ -252,6 +337,10 @@ function App() {
   useEffect(() => {
     loadDeliverySummary()
   }, [loadDeliverySummary])
+
+  useEffect(() => {
+    loadCarLoadOptions()
+  }, [loadCarLoadOptions])
 
   useEffect(() => {
     window.__yodexNativeScanResult = code => {
@@ -268,6 +357,13 @@ function App() {
   }, [])
 
   useEffect(() => {
+    window.__yodexNativeScanResult = handleScanResult
+    return () => {
+      delete window.__yodexNativeScanResult
+    }
+  }, [handleScanResult])
+
+  useEffect(() => {
     window.__wmsAndroidBack = () => {
       if (page === 'complete') {
         setPage('detail')
@@ -277,16 +373,20 @@ function App() {
         setPage('list')
         return true
       }
+      if (page === 'list' && module === 'carload') {
+        setModule('delivery')
+        return true
+      }
       return false
     }
     return () => {
       delete window.__wmsAndroidBack
     }
-  }, [page])
+  }, [module, page])
 
   useEffect(() => {
-    window.YodexNative?.setPullRefreshEnabled?.(page === 'list')
-  }, [page])
+    window.YodexNative?.setPullRefreshEnabled?.(page === 'list' && module === 'delivery')
+  }, [module, page])
 
   const openDeliveryDetail = async row => {
     try {
@@ -347,10 +447,12 @@ function App() {
     if (!confirmed) return
     localStorage.removeItem('wmsDeliveryOperator')
     setOperator(null)
+    setModule('delivery')
     setPage('login')
   }
 
-  const openScanner = () => {
+  const openScanner = (target = 'delivery') => {
+    scannerTargetRef.current = target
     const nativeBridge = window.YodexNative
     if (nativeBridge && typeof nativeBridge.scanCode === 'function') {
       nativeBridge.scanCode()
@@ -368,6 +470,7 @@ function App() {
         })
         localStorage.setItem('wmsDeliveryOperator', JSON.stringify(user))
         setOperator(user)
+        setModule('delivery')
         setPage('list')
       } catch (err) {
         Toast.show({ icon: 'fail', content: err.message === '请求失败' ? '司机或密码不正确' : err.message })
@@ -377,9 +480,10 @@ function App() {
 
   return (
     <div className="app">
-      {page === 'list' && (
+      {page === 'list' && module === 'delivery' && (
         <DeliveryListPage
           operator={operator}
+          module={module}
           rows={deliveries}
           loading={loading}
           todayCompletedCount={todayCompletedCount}
@@ -398,9 +502,29 @@ function App() {
             const preset = dateRangePresets.find(item => item.value === value[0])
             if (preset) setDateRange(preset.range())
           }}
+          onModule={setModule}
           onOpenDate={() => setDatePopup(true)}
-          onOpenScanner={openScanner}
+          onOpenScanner={() => openScanner('delivery')}
           onOpenDetail={openDeliveryDetail}
+          logout={logout}
+        />
+      )}
+      {page === 'list' && module === 'carload' && (
+        <CarLoadPage
+          operator={operator}
+          module={module}
+          options={carLoadOptions}
+          billText={carLoadBillText}
+          rows={carLoadRows}
+          selectedCarId={selectedCarId}
+          selectedDriverId={selectedDriverId}
+          loading={carLoadLoading}
+          onModule={setModule}
+          onBillText={setCarLoadBillText}
+          onCar={setSelectedCarId}
+          onDriver={setSelectedDriverId}
+          onScan={() => openScanner('carload')}
+          onSubmit={submitCarLoad}
           logout={logout}
         />
       )}
@@ -439,11 +563,7 @@ function App() {
       <ScannerPopup
         visible={scannerVisible}
         onClose={() => setScannerVisible(false)}
-        onScan={code => {
-          setKeyword(code)
-          setScannerVisible(false)
-          Toast.show('已识别单号')
-        }}
+        onScan={handleScanResult}
       />
     </div>
   )
@@ -474,9 +594,131 @@ function LoginPage({ onLogin }) {
   )
 }
 
+function ModuleSwitch({ active, onChange }) {
+  return (
+    <div className="module-switch">
+      <button type="button" className={active === 'delivery' ? 'active' : ''} onClick={() => onChange('delivery')}>配送单</button>
+      <button type="button" className={active === 'carload' ? 'active' : ''} onClick={() => onChange('carload')}>扫码装车</button>
+    </div>
+  )
+}
+
+function CarLoadPage(props) {
+  const {
+    operator,
+    module,
+    options,
+    billText,
+    rows,
+    selectedCarId,
+    selectedDriverId,
+    loading,
+    onModule,
+    onBillText,
+    onCar,
+    onDriver,
+    onScan,
+    onSubmit,
+    logout,
+  } = props
+  const cars = options?.cars || []
+  const drivers = options?.drivers || []
+  const carOptions = cars.map(car => ({
+    label: getValue(car, 'name', 'Name') || getValue(car, 'code', 'Code') || getValue(car, 'id', 'Id'),
+    value: getValue(car, 'id', 'Id'),
+  })).filter(item => item.value)
+  const driverOptions = drivers.map(driver => ({
+    label: getValue(driver, 'name', 'Name') || getValue(driver, 'code', 'Code') || getValue(driver, 'id', 'Id'),
+    value: getValue(driver, 'id', 'Id'),
+  })).filter(item => item.value)
+  const selectedCar = cars.find(car => getValue(car, 'id', 'Id') === selectedCarId)
+  const changeCar = value => {
+    const nextCarId = value[0] || ''
+    onCar(nextCarId)
+    const nextCar = cars.find(car => getValue(car, 'id', 'Id') === nextCarId)
+    const nextDriverId = getValue(nextCar, 'driverID', 'driverId', 'DriverID')
+    if (nextDriverId && drivers.some(driver => getValue(driver, 'id', 'Id') === nextDriverId)) {
+      onDriver(nextDriverId)
+    }
+  }
+
+  return (
+    <div className="page-shell carload-shell">
+      <NavBar
+        className="list-nav"
+        backIcon={false}
+        left={<div className="nav-user-title">Hi，{displayName(operator)}！发货装车</div>}
+        right={<Button fill="none" className="nav-icon-button logout-button" aria-label="退出登录" onClick={logout}><CloseCircleOutline /></Button>}
+      />
+      <ModuleSwitch active={module} onChange={onModule} />
+
+      <div className="content-list">
+        <Card className="carload-panel">
+          <div className="carload-section-label">车辆</div>
+          <Selector
+            value={selectedCarId ? [selectedCarId] : []}
+            onChange={changeCar}
+            columns={2}
+            options={carOptions}
+          />
+          {selectedCar && (
+            <div className="carload-hint">线路：{getValue(selectedCar, 'deliveryAreaNames', 'DeliveryAreaNames') || '-'}</div>
+          )}
+
+          <div className="carload-section-label">司机</div>
+          <Selector
+            value={selectedDriverId ? [selectedDriverId] : []}
+            onChange={value => onDriver(value[0] || '')}
+            columns={2}
+            options={driverOptions}
+          />
+
+          <div className="carload-section-label">发货单号</div>
+          <div className="carload-scan-row">
+            <SearchBar
+              value={billText}
+              onChange={onBillText}
+              onSearch={value => onSubmit(value)}
+              onClear={() => onBillText('')}
+              placeholder="扫描/输入发货单号"
+            />
+            <Button fill="outline" color="primary" className="scan-button" onClick={onScan}><ScanCodeOutline /></Button>
+          </div>
+          <Button block color="primary" size="large" loading={loading} disabled={loading || !billText.trim()} onClick={() => onSubmit()}>
+            装车
+          </Button>
+        </Card>
+
+        <div className="section-title">本次装车</div>
+        {rows.length === 0 ? (
+          <Empty description="扫描发货单后显示装车记录" />
+        ) : rows.map(row => (
+          <Card className="carload-result-card" key={getValue(row, 'carLoadBillID', 'carLoadBillId', 'CarLoadBillID')}>
+            <div className="bill-title-row">
+              <div>
+                <div className="bill-code">{getValue(row, 'sourceBillCode', 'SourceBillCode')}</div>
+                <div className="bill-sub">{getValue(row, 'customerName', 'CustomerName') || '-'}</div>
+              </div>
+              <Tag color="success">已装车</Tag>
+            </div>
+            <div className="delivery-grid">
+              <Info label="装车单" value={getValue(row, 'carLoadBillCode', 'CarLoadBillCode')} />
+              <Info label="车辆" value={getValue(row, 'carName', 'CarName')} />
+              <Info label="司机" value={getValue(row, 'driverName', 'DriverName')} />
+              <Info label="线路" value={getValue(row, 'routeName', 'RouteName') || '-'} />
+            </div>
+            <div className="bill-sub carload-time">{getValue(row, 'loadedAt', 'LoadedAt')}</div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function DeliveryListPage(props) {
   const {
     operator,
+    module,
     rows,
     loading,
     todayCompletedCount,
@@ -491,6 +733,7 @@ function DeliveryListPage(props) {
     onRouteFilter,
     onStatusFilter,
     onDatePreset,
+    onModule,
     onOpenDate,
     onOpenScanner,
     onOpenDetail,
@@ -522,6 +765,7 @@ function DeliveryListPage(props) {
         left={<div className="nav-user-title">Hi，{operator.loginName || operator.login}！今日已配送：{todayCompletedCount}单</div>}
         right={<Button fill="none" className="nav-icon-button logout-button" aria-label="退出登录" onClick={logout}><CloseCircleOutline /></Button>}
       />
+      <ModuleSwitch active={module} onChange={onModule} />
 
       <div className="list-sticky-area">
         <div className="delivery-tools">
