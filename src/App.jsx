@@ -752,9 +752,9 @@ function CarLoadPage(props) {
     value: getValue(row, 'id', 'Id'),
     label: (
       <div className="manual-option">
-        <b>{getValue(row, 'billCode', 'BillCode')}</b>
-        <span>{getValue(row, 'customerName', 'CustomerName') || '-'}</span>
-        <span>{getValue(row, 'routeName', 'RouteName') || '-'} · {fmt(getValue(row, 'quantity', 'Quantity'))}</span>
+        <span>{getValue(row, 'billCode', 'BillCode')}</span>
+        <b>{getValue(row, 'customerName', 'CustomerName') || '-'}</b>
+        <span>{getValue(row, 'address', 'Address') || '-'}</span>
       </div>
     ),
   })).filter(item => item.value)
@@ -767,7 +767,6 @@ function CarLoadPage(props) {
         left={<div className="nav-user-title">Hi，{displayName(operator)}！发货装车</div>}
         right={<Button fill="none" className="nav-icon-button logout-button" aria-label="退出登录" onClick={logout}><CloseCircleOutline /></Button>}
       />
-      <ModuleSwitch active={module} onChange={onModule} />
 
       <div className="content-list">
         <Card className="carload-panel">
@@ -784,38 +783,41 @@ function CarLoadPage(props) {
           </div>
         </Card>
 
-        <div className="section-title">本次待装车</div>
         {rows.length === 0 ? (
           <Empty description="扫描或手动选单后显示待装车单据" />
         ) : rows.map(row => (
           <Card className="carload-result-card" key={getValue(row, 'id', 'Id')}>
-            <div className="bill-title-row">
-              <div>
-                <div className="bill-code">{getValue(row, 'billCode', 'BillCode')}</div>
-                <div className="bill-sub">{getValue(row, 'customerName', 'CustomerName') || '-'}</div>
-              </div>
-              <Tag color="warning">待装车</Tag>
-            </div>
-            <div className="delivery-grid carload-meta-grid">
-              <Info label="联系人" value={getValue(row, 'contact', 'Contact') || '-'} />
-              <Info label="手机号" value={getValue(row, 'phone', 'Phone') || '-'} href={getValue(row, 'phone', 'Phone') ? `tel:${getValue(row, 'phone', 'Phone')}` : ''} />
-              <Info label="线路" value={getValue(row, 'routeName', 'RouteName') || '-'} />
-              <Info label="地址" value={getValue(row, 'address', 'Address') || '-'} className="wide" />
-              <Info label="备注" value={getValue(row, 'comment', 'Comment') || '-'} className="wide" />
-            </div>
             <Button className="remove-row-button" size="small" fill="none" onClick={() => onRemoveRow(getValue(row, 'id', 'Id'))}>
               <DeleteOutline /> 移除
             </Button>
+            <div className="bill-title-row">
+              <div>
+                <div className="bill-code">{getValue(row, 'billCode', 'BillCode')}</div>
+                <div className="customer-name carload-customer-name">{getValue(row, 'customerName', 'CustomerName') || '-'}</div>
+              </div>
+            </div>
+            <div className="carload-inline-meta">
+              <span>联系人：{getValue(row, 'contact', 'Contact') || '-'}</span>
+              <a href={getValue(row, 'phone', 'Phone') ? `tel:${getValue(row, 'phone', 'Phone')}` : undefined} onClick={event => event.stopPropagation()}>
+                手机号：{getValue(row, 'phone', 'Phone') || '-'}
+              </a>
+              <span>线路：{getValue(row, 'routeName', 'RouteName') || '-'}</span>
+            </div>
+            <div className="delivery-grid carload-meta-grid">
+              <Info label="地址" value={getValue(row, 'address', 'Address') || '-'} className="wide" />
+              {getValue(row, 'comment', 'Comment') && <Info label="备注" value={getValue(row, 'comment', 'Comment')} className="wide" />}
+            </div>
           </Card>
         ))}
       </div>
 
-      <div className="bottom-bar">
+      <div className="bottom-bar carload-bottom-bar">
         <div>合计：<span className="success-text">{rows.length}</span> 单 / <span className="success-text">{fmt(totalQty)}</span></div>
         <Button color="primary" size="large" disabled={rows.length === 0} onClick={() => onSheetVisible(true)}>
           装车
         </Button>
       </div>
+      <ModuleSwitch active={module} onChange={onModule} />
 
       <Popup visible={sheetVisible} position="bottom" bodyClassName="carload-action-popup" closeOnMaskClick onMaskClick={() => onSheetVisible(false)}>
         <div className="carload-popup-body">
@@ -920,7 +922,6 @@ function DeliveryListPage(props) {
         left={<div className="nav-user-title">Hi，{operator.loginName || operator.login}！今日已配送：{todayCompletedCount}单</div>}
         right={<Button fill="none" className="nav-icon-button logout-button" aria-label="退出登录" onClick={logout}><CloseCircleOutline /></Button>}
       />
-      <ModuleSwitch active={module} onChange={onModule} />
 
       <div className="list-sticky-area">
         <div className="delivery-tools">
@@ -1001,6 +1002,7 @@ function DeliveryListPage(props) {
               <Info label="手机号" value={row.phone || '-'} href={row.phone ? `tel:${row.phone}` : ''} />
               <Info label="距离" value={`${fmt(row.distance)} km`} strong />
             </div>
+            {row.comment && <div className="delivery-remark"><span>备注</span><b>{row.comment}</b></div>}
             <div className="address-row">
               <div className="address-line">{row.address || '客户地址未维护'}</div>
               <Button className="navigate-button" fill="outline" color="primary" onClick={event => openNavigation(event, row)}>
@@ -1011,6 +1013,7 @@ function DeliveryListPage(props) {
           </Card>
         ))}
       </div>
+      <ModuleSwitch active={module} onChange={onModule} />
     </div>
   )
 }
