@@ -371,6 +371,7 @@ function App() {
       })
       localStorage.setItem(carLoadLastCarKey, selectedCarId)
       setCarLoadRows([])
+      setManualRows([])
       setManualSelectedIds([])
       setCarLoadBillText('')
       setCarLoadSheetVisible(false)
@@ -596,7 +597,7 @@ function App() {
           onSheetVisible={setCarLoadSheetVisible}
           onManualVisible={visible => {
             setManualPickerVisible(visible)
-            if (visible && manualRows.length === 0) searchManualBills('')
+            if (visible) searchManualBills(manualSearchText)
           }}
           onManualSearchText={setManualSearchText}
           onManualSelectedIds={setManualSelectedIds}
