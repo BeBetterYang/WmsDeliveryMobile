@@ -58,6 +58,7 @@ const dateRangePresets = [
   { label: '明天', value: 'tomorrow', range: () => [formatDate(addDays(new Date(), 1)), formatDate(addDays(new Date(), 1))] },
   { label: '近7天', value: 'last7', range: () => [formatDate(addDays(new Date(), -6)), today()] },
 ]
+const defaultManualDateRange = () => [formatDate(addDays(new Date(), -7)), formatDate(addDays(new Date(), 7))]
 const statusMeta = status => deliveryStatusOptions.find(item => item.value === status) || deliveryStatusOptions[0]
 const maxImageBytes = 500 * 1024
 const carLoadLastCarKey = 'wmsDeliveryLastCarLoadCarId'
@@ -190,6 +191,8 @@ function App() {
   const [carLoadSheetVisible, setCarLoadSheetVisible] = useState(false)
   const [manualPickerVisible, setManualPickerVisible] = useState(false)
   const [manualSearchText, setManualSearchText] = useState('')
+  const [manualDateRange, setManualDateRange] = useState(defaultManualDateRange)
+  const [manualDatePopup, setManualDatePopup] = useState(false)
   const [manualRows, setManualRows] = useState([])
   const [manualSelectedIds, setManualSelectedIds] = useState([])
   const [manualLoading, setManualLoading] = useState(false)
@@ -310,10 +313,14 @@ function App() {
     }
   }, [carLoadBillText])
 
-  const searchManualBills = useCallback(async (rawKeyword = manualSearchText) => {
+  const searchManualBills = useCallback(async (rawKeyword = manualSearchText, range = manualDateRange) => {
     setManualLoading(true)
     try {
-      const query = queryString({ q: String(rawKeyword || '').trim() })
+      const query = queryString({
+        q: String(rawKeyword || '').trim(),
+        dateFrom: range?.[0],
+        dateTo: range?.[1],
+      })
       const rows = await api(`/api/carload/pending?${query}`)
       setManualRows(rows || [])
       setManualSelectedIds(carLoadRows.map(row => getValue(row, 'id', 'Id')).filter(Boolean))
@@ -322,7 +329,7 @@ function App() {
     } finally {
       setManualLoading(false)
     }
-  }, [carLoadRows, manualSearchText])
+  }, [carLoadRows, manualDateRange, manualSearchText])
 
   const addManualBills = useCallback(() => {
     const existing = new Set(carLoadRows.map(row => getValue(row, 'id', 'Id')))
@@ -586,6 +593,7 @@ function App() {
           manualVisible={manualPickerVisible}
           manualRows={manualRows}
           manualSearchText={manualSearchText}
+          manualDateRange={manualDateRange}
           manualSelectedIds={manualSelectedIds}
           manualLoading={manualLoading}
           loading={carLoadLoading}
@@ -600,6 +608,7 @@ function App() {
             if (visible) searchManualBills(manualSearchText)
           }}
           onManualSearchText={setManualSearchText}
+          onManualDate={() => setManualDatePopup(true)}
           onManualSelectedIds={setManualSelectedIds}
           onManualSearch={searchManualBills}
           onManualConfirm={addManualBills}
@@ -643,6 +652,21 @@ function App() {
           setDateRange(value?.map(formatDate) || null)
           setDatePreset(['custom'])
           setDatePopup(false)
+        }}
+      />
+      <CalendarPicker
+        visible={manualDatePopup}
+        selectionMode="range"
+        title="选择单据日期"
+        min={new Date(2025, 0, 1)}
+        max={new Date(2027, 11, 31)}
+        closeOnMaskClick
+        onClose={() => setManualDatePopup(false)}
+        onConfirm={value => {
+          const nextRange = value?.map(formatDate) || defaultManualDateRange()
+          setManualDateRange(nextRange)
+          setManualDatePopup(false)
+          if (manualPickerVisible) searchManualBills(manualSearchText, nextRange)
         }}
       />
       <ScannerPopup
@@ -702,6 +726,7 @@ function CarLoadPage(props) {
     manualVisible,
     manualRows,
     manualSearchText,
+    manualDateRange,
     manualSelectedIds,
     manualLoading,
     loading,
@@ -713,6 +738,7 @@ function CarLoadPage(props) {
     onSheetVisible,
     onManualVisible,
     onManualSearchText,
+    onManualDate,
     onManualSelectedIds,
     onManualSearch,
     onManualConfirm,
@@ -864,6 +890,7 @@ function CarLoadPage(props) {
               onSearch={onManualSearch}
               placeholder="搜索单号 / 客户 / 线路"
             />
+            <Button color="primary" fill="none" className="manual-date-button" onClick={onManualDate}>日期</Button>
             <Button color="primary" fill="outline" onClick={() => onManualSearch(manualSearchText)}>查询</Button>
           </div>
           {manualRows.length === 0 ? (

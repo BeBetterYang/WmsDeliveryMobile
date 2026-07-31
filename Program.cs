@@ -669,11 +669,11 @@ app.MapGet("/api/carload/scan", async (string billCode) =>
     return Results.Ok(ToCarLoadPendingBill(source));
 });
 
-app.MapGet("/api/carload/pending", async (string? q) =>
+app.MapGet("/api/carload/pending", async (string? q, string? dateFrom, string? dateTo) =>
 {
     await using var conn = new SqlConnection(connectionString);
     await conn.OpenAsync();
-    return Results.Ok(await LoadCarLoadPendingBills(conn, null, q, 80));
+    return Results.Ok(await LoadCarLoadPendingBills(conn, null, q, dateFrom, dateTo, 80));
 });
 
 app.MapPost("/api/carload/submit", async (CarLoadSubmitRequest request) =>
@@ -1400,7 +1400,7 @@ static async Task<CarLoadSourceBill?> LoadCarLoadSourceBillById(SqlConnection co
     return await reader.ReadAsync() ? ReadCarLoadSourceBill(reader) : null;
 }
 
-static async Task<IReadOnlyList<CarLoadPendingBillDto>> LoadCarLoadPendingBills(SqlConnection conn, SqlTransaction? tx, string? q, int top)
+static async Task<IReadOnlyList<CarLoadPendingBillDto>> LoadCarLoadPendingBills(SqlConnection conn, SqlTransaction? tx, string? q, string? dateFrom, string? dateTo, int top)
 {
     await using var cmd = conn.CreateCommand();
     cmd.Transaction = tx;
@@ -1466,6 +1466,8 @@ static async Task<IReadOnlyList<CarLoadPendingBillDto>> LoadCarLoadPendingBills(
           AND ISNULL(SBI.BillMerge,0)<>2
           AND ISNULL(SBI.BillSplit,0)<>1
           AND (ISNULL(SBI.MultiDelivery,0)=0 OR (ISNULL(SBI.BillMerge,0)=1 AND ISNULL(SBI.MultiDelivery,0)=1))
+          AND (@DateFrom='' OR SBI.BillDate>=@DateFrom)
+          AND (@DateTo='' OR SBI.BillDate<=@DateTo)
           AND (
               @Q=''
               OR SBI.BillCode LIKE @LikeQ
@@ -1478,6 +1480,8 @@ static async Task<IReadOnlyList<CarLoadPendingBillDto>> LoadCarLoadPendingBills(
     var keyword = (q ?? "").Trim();
     AddString(cmd, "@Q", keyword);
     AddString(cmd, "@LikeQ", $"%{keyword}%");
+    AddString(cmd, "@DateFrom", dateFrom);
+    AddString(cmd, "@DateTo", dateTo);
     var rows = new List<CarLoadPendingBillDto>();
     await using var reader = await cmd.ExecuteReaderAsync();
     while (await reader.ReadAsync())

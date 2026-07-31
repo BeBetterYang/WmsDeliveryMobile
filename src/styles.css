@@ -472,7 +472,7 @@ select,
   top: 0;
   z-index: 3;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 64px;
+  grid-template-columns: minmax(0, 1fr) 42px 64px;
   gap: 8px;
   align-items: center;
   padding: 8px 4px;
@@ -486,6 +486,13 @@ select,
 }
 .manual-search-row .adm-button {
   height: 44px;
+}
+.manual-search-row .manual-date-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  --border-width: 0;
+  --background-color: transparent;
 }
 .manual-option {
   display: grid;
