@@ -431,6 +431,22 @@ function App() {
 
   useEffect(() => {
     window.__wmsAndroidBack = () => {
+      if (manualDatePopup) {
+        setManualDatePopup(false)
+        return true
+      }
+      if (manualPickerVisible) {
+        setManualPickerVisible(false)
+        return true
+      }
+      if (carLoadSheetVisible) {
+        setCarLoadSheetVisible(false)
+        return true
+      }
+      if (datePopup) {
+        setDatePopup(false)
+        return true
+      }
       if (page === 'complete') {
         setPage('detail')
         return true
@@ -448,11 +464,11 @@ function App() {
     return () => {
       delete window.__wmsAndroidBack
     }
-  }, [module, page])
+  }, [carLoadSheetVisible, datePopup, manualDatePopup, manualPickerVisible, module, page])
 
   useEffect(() => {
-    window.YodexNative?.setPullRefreshEnabled?.(page === 'list' && module === 'delivery')
-  }, [module, page])
+    window.YodexNative?.setPullRefreshEnabled?.(page === 'list' && module === 'delivery' && !manualPickerVisible && !carLoadSheetVisible && !datePopup && !manualDatePopup)
+  }, [carLoadSheetVisible, datePopup, manualDatePopup, manualPickerVisible, module, page])
 
   useEffect(() => {
     scannerTargetRef.current = module
@@ -798,6 +814,7 @@ function CarLoadPage(props) {
         <b className="manual-bill-code">{getValue(row, 'billCode', 'BillCode')}</b>
         <b>{getValue(row, 'customerName', 'CustomerName') || '-'}</b>
         <span>{getValue(row, 'address', 'Address') || '-'}</span>
+        {getValue(row, 'comment', 'Comment') && <span>备注：{getValue(row, 'comment', 'Comment')}</span>}
       </div>
     ),
   })).filter(item => item.value)
