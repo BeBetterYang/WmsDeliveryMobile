@@ -1279,6 +1279,16 @@ static async Task<CarLoadSourceBill?> LoadCarLoadSourceBill(SqlConnection conn, 
             SBI.KTypeIDMain,
             SBI.BTypeID,
             SBI.BTypeName,
+            ISNULL(SBI.Comment,'') AS Comment,
+            B.Person,
+            B.linker,
+            B.linkerTel,
+            B.moPhone,
+            B.TelAndAddress,
+            B.province,
+            B.city,
+            B.region,
+            B.Area,
             ISNULL(SBI.PackSumQty,0) AS PackSumQty,
             ISNULL(SBI.DispatchState,0) AS DispatchState,
             ISNULL(SBI.CarLoadStatus,0) AS CarLoadStatus,
@@ -1293,6 +1303,7 @@ static async Task<CarLoadSourceBill?> LoadCarLoadSourceBill(SqlConnection conn, 
             RouteConfig.ExpressID,
             RouteConfig.ExpressName
         FROM dbo.Wlt_Wms_SourceBillIndex SBI
+        LEFT JOIN dbo.Btype B ON B.btypeid=SBI.BTypeID
         OUTER APPLY (
             SELECT TOP 1
                 DA.DeliveryAreaID,
@@ -1319,29 +1330,7 @@ static async Task<CarLoadSourceBill?> LoadCarLoadSourceBill(SqlConnection conn, 
         """;
     AddString(cmd, "@BillCode", billCode);
     await using var reader = await cmd.ExecuteReaderAsync();
-    return await reader.ReadAsync()
-        ? new CarLoadSourceBill(
-            ReadString(reader, "BillID"),
-            ReadString(reader, "BillCode"),
-            ReadString(reader, "BillDate"),
-            ReadString(reader, "STypeID"),
-            ReadString(reader, "KTypeIDMain"),
-            ReadString(reader, "BTypeID"),
-            ReadString(reader, "BTypeName"),
-            ReadInt(reader, "PackSumQty"),
-            ReadInt(reader, "DispatchState"),
-            ReadInt(reader, "CarLoadStatus"),
-            ReadInt(reader, "PickStatus"),
-            ReadInt(reader, "BillMerge"),
-            ReadInt(reader, "BillSplit"),
-            ReadInt(reader, "MultiDelivery"),
-            ReadString(reader, "SyncSource"),
-            ReadString(reader, "CarLoadBillID"),
-            ReadString(reader, "DeliveryAreaID"),
-            ReadString(reader, "DeliveryAreaName"),
-            ReadString(reader, "ExpressID"),
-            ReadString(reader, "ExpressName"))
-        : null;
+    return await reader.ReadAsync() ? ReadCarLoadSourceBill(reader) : null;
 }
 
 static async Task<CarLoadSourceBill?> LoadCarLoadSourceBillById(SqlConnection conn, SqlTransaction tx, string sourceBillId)
@@ -1357,6 +1346,16 @@ static async Task<CarLoadSourceBill?> LoadCarLoadSourceBillById(SqlConnection co
             SBI.KTypeIDMain,
             SBI.BTypeID,
             SBI.BTypeName,
+            ISNULL(SBI.Comment,'') AS Comment,
+            B.Person,
+            B.linker,
+            B.linkerTel,
+            B.moPhone,
+            B.TelAndAddress,
+            B.province,
+            B.city,
+            B.region,
+            B.Area,
             ISNULL(SBI.PackSumQty,0) AS PackSumQty,
             ISNULL(SBI.DispatchState,0) AS DispatchState,
             ISNULL(SBI.CarLoadStatus,0) AS CarLoadStatus,
@@ -1371,6 +1370,7 @@ static async Task<CarLoadSourceBill?> LoadCarLoadSourceBillById(SqlConnection co
             RouteConfig.ExpressID,
             RouteConfig.ExpressName
         FROM dbo.Wlt_Wms_SourceBillIndex SBI
+        LEFT JOIN dbo.Btype B ON B.btypeid=SBI.BTypeID
         OUTER APPLY (
             SELECT TOP 1
                 DA.DeliveryAreaID,
@@ -1412,6 +1412,16 @@ static async Task<IReadOnlyList<CarLoadPendingBillDto>> LoadCarLoadPendingBills(
             SBI.KTypeIDMain,
             SBI.BTypeID,
             SBI.BTypeName,
+            ISNULL(SBI.Comment,'') AS Comment,
+            B.Person,
+            B.linker,
+            B.linkerTel,
+            B.moPhone,
+            B.TelAndAddress,
+            B.province,
+            B.city,
+            B.region,
+            B.Area,
             ISNULL(SBI.PackSumQty,0) AS PackSumQty,
             ISNULL(SBI.DispatchState,0) AS DispatchState,
             ISNULL(SBI.CarLoadStatus,0) AS CarLoadStatus,
@@ -1426,6 +1436,7 @@ static async Task<IReadOnlyList<CarLoadPendingBillDto>> LoadCarLoadPendingBills(
             RouteConfig.ExpressID,
             RouteConfig.ExpressName
         FROM dbo.Wlt_Wms_SourceBillIndex SBI
+        LEFT JOIN dbo.Btype B ON B.btypeid=SBI.BTypeID
         OUTER APPLY (
             SELECT TOP 1
                 DA.DeliveryAreaID,
@@ -1483,6 +1494,15 @@ static CarLoadSourceBill ReadCarLoadSourceBill(SqlDataReader reader) => new(
     ReadString(reader, "KTypeIDMain"),
     ReadString(reader, "BTypeID"),
     ReadString(reader, "BTypeName"),
+    FirstNonEmpty(ReadString(reader, "linker"), ReadString(reader, "Person")),
+    FirstNonEmpty(ReadString(reader, "moPhone"), ReadString(reader, "linkerTel")),
+    BuildAddress(
+        ReadString(reader, "province"),
+        ReadString(reader, "city"),
+        ReadString(reader, "region"),
+        ReadString(reader, "Area"),
+        ReadString(reader, "TelAndAddress")),
+    ReadString(reader, "Comment"),
     ReadInt(reader, "PackSumQty"),
     ReadInt(reader, "DispatchState"),
     ReadInt(reader, "CarLoadStatus"),
@@ -1502,6 +1522,10 @@ static CarLoadPendingBillDto ToCarLoadPendingBill(CarLoadSourceBill source) => n
     source.BillCode,
     source.BillDate,
     source.BTypeName,
+    source.Contact,
+    source.Phone,
+    source.Address,
+    source.Comment,
     FirstNonEmpty(source.DeliveryAreaName, source.ExpressName),
     source.PackSumQty,
     source.KTypeIDMain);
@@ -2057,7 +2081,18 @@ record CarLoadCarDto(
 record CarLoadDriverDto(string Id, string Code, string Name, string Mobile);
 record CarLoadScanRequest(string LoginId, string BillCode, string CarId, string DriverId);
 record CarLoadSubmitRequest(string LoginId, IReadOnlyList<string> SourceBillIds, string CarId, string DriverId, IReadOnlyList<string> HamalIds);
-record CarLoadPendingBillDto(string Id, string BillCode, string BillDate, string CustomerName, string RouteName, int Quantity, string KTypeIDMain);
+record CarLoadPendingBillDto(
+    string Id,
+    string BillCode,
+    string BillDate,
+    string CustomerName,
+    string Contact,
+    string Phone,
+    string Address,
+    string Comment,
+    string RouteName,
+    int Quantity,
+    string KTypeIDMain);
 record CarLoadSubmitResultDto(
     string CarLoadBillID,
     string CarLoadBillCode,
@@ -2086,6 +2121,10 @@ record CarLoadSourceBill(
     string KTypeIDMain,
     string BTypeID,
     string BTypeName,
+    string Contact,
+    string Phone,
+    string Address,
+    string Comment,
     int PackSumQty,
     int DispatchState,
     int CarLoadStatus,

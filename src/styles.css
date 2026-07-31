@@ -397,7 +397,6 @@ select,
   grid-template-columns: minmax(0, 1fr) 58px 48px;
   gap: 8px;
   align-items: center;
-  margin-bottom: 12px;
 }
 .manual-button {
   height: 44px;
@@ -410,7 +409,9 @@ select,
 }
 .remove-row-button {
   margin-top: 8px;
+  margin-left: auto;
   color: #8b93a1;
+  display: block;
 }
 .remove-row-button .adm-button-content {
   display: inline-flex;
@@ -472,6 +473,14 @@ select,
 .manual-option span {
   color: #626b7a;
   font-size: 12px;
+}
+.carload-meta-grid .info-item.wide {
+  grid-column: 1 / -1;
+}
+.carload-meta-grid .info-item.wide b,
+.carload-meta-grid .info-item.wide a {
+  white-space: normal;
+  line-height: 1.35;
 }
 .upload-card {
   margin: 8px;

@@ -771,7 +771,6 @@ function CarLoadPage(props) {
 
       <div className="content-list">
         <Card className="carload-panel">
-          <div className="carload-section-label">发货单号</div>
           <div className="carload-scan-row">
             <SearchBar
               value={billText}
@@ -783,7 +782,6 @@ function CarLoadPage(props) {
             <Button fill="outline" color="primary" className="manual-button" onClick={() => onManualVisible(true)}>选单</Button>
             <Button fill="outline" color="primary" className="scan-button" onClick={onScan}><ScanCodeOutline /></Button>
           </div>
-          <div className="carload-hint">扫码或回车后先加入本次装车，确认无误后再统一装车。</div>
         </Card>
 
         <div className="section-title">本次待装车</div>
@@ -798,10 +796,12 @@ function CarLoadPage(props) {
               </div>
               <Tag color="warning">待装车</Tag>
             </div>
-            <div className="delivery-grid">
-              <Info label="日期" value={String(getValue(row, 'billDate', 'BillDate') || '').slice(0, 10)} />
-              <Info label="数量" value={fmt(getValue(row, 'quantity', 'Quantity'))} strong />
+            <div className="delivery-grid carload-meta-grid">
+              <Info label="联系人" value={getValue(row, 'contact', 'Contact') || '-'} />
+              <Info label="手机号" value={getValue(row, 'phone', 'Phone') || '-'} href={getValue(row, 'phone', 'Phone') ? `tel:${getValue(row, 'phone', 'Phone')}` : ''} />
               <Info label="线路" value={getValue(row, 'routeName', 'RouteName') || '-'} />
+              <Info label="地址" value={getValue(row, 'address', 'Address') || '-'} className="wide" />
+              <Info label="备注" value={getValue(row, 'comment', 'Comment') || '-'} className="wide" />
             </div>
             <Button className="remove-row-button" size="small" fill="none" onClick={() => onRemoveRow(getValue(row, 'id', 'Id'))}>
               <DeleteOutline /> 移除
@@ -1519,9 +1519,9 @@ function ScannerPopup({ visible, onClose, onScan }) {
   )
 }
 
-function Info({ label, value, strong, href }) {
+function Info({ label, value, strong, href, className = '' }) {
   return (
-    <div className="info-item">
+    <div className={`info-item${className ? ` ${className}` : ''}`}>
       <span>{label}</span>
       {href ? (
         <a className={strong ? 'strong' : ''} href={href} onClick={event => event.stopPropagation()}>{value}</a>
