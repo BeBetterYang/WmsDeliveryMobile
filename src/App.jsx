@@ -316,16 +316,20 @@ function App() {
       const query = queryString({ q: String(rawKeyword || '').trim() })
       const rows = await api(`/api/carload/pending?${query}`)
       setManualRows(rows || [])
-      setManualSelectedIds([])
+      setManualSelectedIds(carLoadRows.map(row => getValue(row, 'id', 'Id')).filter(Boolean))
     } catch (err) {
       Toast.show({ icon: 'fail', content: err.message })
     } finally {
       setManualLoading(false)
     }
-  }, [manualSearchText])
+  }, [carLoadRows, manualSearchText])
 
   const addManualBills = useCallback(() => {
-    const selectedRows = manualRows.filter(row => manualSelectedIds.includes(getValue(row, 'id', 'Id')))
+    const existing = new Set(carLoadRows.map(row => getValue(row, 'id', 'Id')))
+    const selectedRows = manualRows.filter(row => {
+      const id = getValue(row, 'id', 'Id')
+      return manualSelectedIds.includes(id) && !existing.has(id)
+    })
     if (selectedRows.length === 0) {
       Toast.show('请选择待装车单据')
       return
@@ -337,7 +341,7 @@ function App() {
       return [...nextRows, ...rows]
     })
     setManualPickerVisible(false)
-  }, [manualRows, manualSelectedIds])
+  }, [carLoadRows, manualRows, manualSelectedIds])
 
   const submitCarLoad = useCallback(async () => {
     if (carLoadRows.length === 0) {
@@ -367,6 +371,7 @@ function App() {
       })
       localStorage.setItem(carLoadLastCarKey, selectedCarId)
       setCarLoadRows([])
+      setManualSelectedIds([])
       setCarLoadBillText('')
       setCarLoadSheetVisible(false)
       Toast.show({ icon: 'success', content: `装车成功：${result?.billCount || 0}单` })
@@ -597,7 +602,10 @@ function App() {
           onManualSelectedIds={setManualSelectedIds}
           onManualSearch={searchManualBills}
           onManualConfirm={addManualBills}
-          onRemoveRow={id => setCarLoadRows(rows => rows.filter(row => getValue(row, 'id', 'Id') !== id))}
+          onRemoveRow={id => {
+            setCarLoadRows(rows => rows.filter(row => getValue(row, 'id', 'Id') !== id))
+            setManualSelectedIds(ids => ids.filter(item => item !== id))
+          }}
           onScan={() => openScanner('carload')}
           onAddBill={addCarLoadBill}
           onSubmit={submitCarLoad}
@@ -747,9 +755,17 @@ function CarLoadPage(props) {
     }
     onHamalIds(value)
   }
+  const lockedManualIds = rows.map(row => getValue(row, 'id', 'Id')).filter(Boolean)
+  const lockedManualSet = new Set(lockedManualIds)
+  const manualValue = Array.from(new Set([...manualSelectedIds, ...lockedManualIds]))
+  const manualNewCount = manualValue.filter(id => !lockedManualSet.has(id)).length
+  const changeManualSelected = value => {
+    onManualSelectedIds(Array.from(new Set([...lockedManualIds, ...value])))
+  }
   const totalQty = rows.reduce((sum, row) => sum + Number(getValue(row, 'quantity', 'Quantity') || 0), 0)
   const manualOptions = manualRows.map(row => ({
     value: getValue(row, 'id', 'Id'),
+    disabled: lockedManualSet.has(getValue(row, 'id', 'Id')),
     label: (
       <div className="manual-option">
         <b className="manual-bill-code">{getValue(row, 'billCode', 'BillCode')}</b>
@@ -854,16 +870,16 @@ function CarLoadPage(props) {
           ) : (
             <Selector
               multiple
-              value={manualSelectedIds}
-              onChange={onManualSelectedIds}
+              value={manualValue}
+              onChange={changeManualSelected}
               columns={1}
               options={manualOptions}
             />
           )}
         </div>
         <div className="bottom-bar">
-          <div>已选：<span className="success-text">{manualSelectedIds.length}</span> 单</div>
-          <Button color="primary" size="large" disabled={manualSelectedIds.length === 0} onClick={onManualConfirm}>带入本次装车</Button>
+          <div>已选：<span className="success-text">{manualValue.length}</span> 单</div>
+          <Button color="primary" size="large" disabled={manualNewCount === 0} onClick={onManualConfirm}>带入本次装车</Button>
         </div>
       </Popup>
     </div>
