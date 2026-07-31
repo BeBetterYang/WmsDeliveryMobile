@@ -659,19 +659,7 @@ select,
 }
 .scanner-frame::before,
 .scanner-frame::after {
-  content: "";
-  position: absolute;
-  left: 16px;
-  right: 16px;
-  height: 2px;
-  background: rgba(22,119,255,.95);
-  box-shadow: 0 0 12px rgba(22,119,255,.8);
-}
-.scanner-frame::before {
-  top: 34%;
-}
-.scanner-frame::after {
-  top: 66%;
+  display: none;
 }
 .scanner-tip {
   position: absolute;
