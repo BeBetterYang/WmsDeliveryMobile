@@ -13,6 +13,7 @@ import {
   Popup,
   SearchBar,
   Selector,
+  TabBar,
   Tag,
   Toast,
 } from 'antd-mobile'
@@ -59,6 +60,7 @@ const dateRangePresets = [
 ]
 const statusMeta = status => deliveryStatusOptions.find(item => item.value === status) || deliveryStatusOptions[0]
 const maxImageBytes = 500 * 1024
+const carLoadLastCarKey = 'wmsDeliveryLastCarLoadCarId'
 const getValue = (row, ...keys) => keys.map(key => row?.[key]).find(value => value !== undefined && value !== null) ?? ''
 const displayName = operator => operator?.loginName || operator?.login || ''
 
@@ -184,6 +186,13 @@ function App() {
   const [carLoadRows, setCarLoadRows] = useState([])
   const [selectedCarId, setSelectedCarId] = useState('')
   const [selectedDriverId, setSelectedDriverId] = useState('')
+  const [selectedHamalIds, setSelectedHamalIds] = useState([])
+  const [carLoadSheetVisible, setCarLoadSheetVisible] = useState(false)
+  const [manualPickerVisible, setManualPickerVisible] = useState(false)
+  const [manualSearchText, setManualSearchText] = useState('')
+  const [manualRows, setManualRows] = useState([])
+  const [manualSelectedIds, setManualSelectedIds] = useState([])
+  const [manualLoading, setManualLoading] = useState(false)
   const [carLoadLoading, setCarLoadLoading] = useState(false)
   const scannerTargetRef = useRef('delivery')
 
@@ -260,24 +269,79 @@ function App() {
 
       setSelectedCarId(current => {
         if (current && cars.some(car => getValue(car, 'id', 'Id') === current)) return current
+        const lastCarId = localStorage.getItem(carLoadLastCarKey) || ''
+        if (lastCarId && cars.some(car => getValue(car, 'id', 'Id') === lastCarId)) return lastCarId
         return getValue(cars[0], 'id', 'Id')
       })
       setSelectedDriverId(current => {
         if (current && drivers.some(driver => getValue(driver, 'id', 'Id') === current)) return current
         const currentDriver = drivers.find(driver => getValue(driver, 'id', 'Id') === operator.loginID)
-        const firstCarDriver = getValue(cars[0], 'driverID', 'driverId', 'DriverID')
-        const carDriver = drivers.find(driver => getValue(driver, 'id', 'Id') === firstCarDriver)
-        return getValue(currentDriver || carDriver || drivers[0], 'id', 'Id')
+        return getValue(currentDriver || drivers[0], 'id', 'Id')
       })
     } catch (err) {
       Toast.show({ icon: 'fail', content: err.message })
     }
   }, [operator?.loginID])
 
-  const submitCarLoad = useCallback(async (rawBillCode = carLoadBillText) => {
+  const addCarLoadBill = useCallback(async (rawBillCode = carLoadBillText) => {
     const billCode = String(rawBillCode || '').trim()
     if (!billCode) {
       Toast.show('请输入或扫描发货单号')
+      return
+    }
+
+    setCarLoadLoading(true)
+    try {
+      const query = queryString({ billCode })
+      const row = await api(`/api/carload/scan?${query}`)
+      setCarLoadRows(rows => {
+        if (rows.some(item => getValue(item, 'id', 'Id') === getValue(row, 'id', 'Id'))) {
+          Toast.show('该单据已在本次装车中')
+          return rows
+        }
+        return [row, ...rows]
+      })
+      setCarLoadBillText('')
+      Toast.show({ icon: 'success', content: '已加入本次装车' })
+    } catch (err) {
+      Toast.show({ icon: 'fail', content: err.message })
+    } finally {
+      setCarLoadLoading(false)
+    }
+  }, [carLoadBillText])
+
+  const searchManualBills = useCallback(async (rawKeyword = manualSearchText) => {
+    setManualLoading(true)
+    try {
+      const query = queryString({ q: String(rawKeyword || '').trim() })
+      const rows = await api(`/api/carload/pending?${query}`)
+      setManualRows(rows || [])
+      setManualSelectedIds([])
+    } catch (err) {
+      Toast.show({ icon: 'fail', content: err.message })
+    } finally {
+      setManualLoading(false)
+    }
+  }, [manualSearchText])
+
+  const addManualBills = useCallback(() => {
+    const selectedRows = manualRows.filter(row => manualSelectedIds.includes(getValue(row, 'id', 'Id')))
+    if (selectedRows.length === 0) {
+      Toast.show('请选择待装车单据')
+      return
+    }
+    setCarLoadRows(rows => {
+      const existing = new Set(rows.map(row => getValue(row, 'id', 'Id')))
+      const nextRows = selectedRows.filter(row => !existing.has(getValue(row, 'id', 'Id')))
+      if (nextRows.length === 0) Toast.show('所选单据已在本次装车中')
+      return [...nextRows, ...rows]
+    })
+    setManualPickerVisible(false)
+  }, [manualRows, manualSelectedIds])
+
+  const submitCarLoad = useCallback(async () => {
+    if (carLoadRows.length === 0) {
+      Toast.show('请先加入待装车单据')
       return
     }
     if (!selectedCarId) {
@@ -291,39 +355,42 @@ function App() {
 
     setCarLoadLoading(true)
     try {
-      const result = await api('/api/carload/scan', {
+      const result = await api('/api/carload/submit', {
         method: 'POST',
         body: JSON.stringify({
           loginId: operator.loginID,
-          billCode,
+          sourceBillIds: carLoadRows.map(row => getValue(row, 'id', 'Id')),
           carId: selectedCarId,
           driverId: selectedDriverId,
+          hamalIds: selectedHamalIds,
         }),
       })
-      setCarLoadRows(rows => [result, ...rows].slice(0, 30))
+      localStorage.setItem(carLoadLastCarKey, selectedCarId)
+      setCarLoadRows([])
       setCarLoadBillText('')
-      Toast.show({ icon: 'success', content: '装车成功' })
+      setCarLoadSheetVisible(false)
+      Toast.show({ icon: 'success', content: `装车成功：${result?.billCount || 0}单` })
       await loadDeliveries()
     } catch (err) {
       Toast.show({ icon: 'fail', content: err.message })
     } finally {
       setCarLoadLoading(false)
     }
-  }, [carLoadBillText, loadDeliveries, operator?.loginID, selectedCarId, selectedDriverId])
+  }, [carLoadRows, loadDeliveries, operator?.loginID, selectedCarId, selectedDriverId, selectedHamalIds])
 
   const handleScanResult = useCallback(code => {
     const value = String(code || '').trim()
     if (!value) return
     setScannerVisible(false)
-    if (scannerTargetRef.current === 'carload') {
+    if (scannerTargetRef.current === 'carload' || module === 'carload') {
       setCarLoadBillText(value)
-      submitCarLoad(value)
+      addCarLoadBill(value)
       return
     }
     setSearchText(value)
     setKeyword(value)
     Toast.show('已识别单号')
-  }, [submitCarLoad])
+  }, [addCarLoadBill, module])
 
   useEffect(() => {
     const timer = window.setTimeout(loadDeliveries, 180)
@@ -341,20 +408,6 @@ function App() {
   useEffect(() => {
     loadCarLoadOptions()
   }, [loadCarLoadOptions])
-
-  useEffect(() => {
-    window.__yodexNativeScanResult = code => {
-      const value = String(code || '').trim()
-      if (!value) return
-      setSearchText(value)
-      setKeyword(value)
-      setScannerVisible(false)
-      Toast.show('已识别单号')
-    }
-    return () => {
-      delete window.__yodexNativeScanResult
-    }
-  }, [])
 
   useEffect(() => {
     window.__yodexNativeScanResult = handleScanResult
@@ -387,6 +440,10 @@ function App() {
   useEffect(() => {
     window.YodexNative?.setPullRefreshEnabled?.(page === 'list' && module === 'delivery')
   }, [module, page])
+
+  useEffect(() => {
+    scannerTargetRef.current = module
+  }, [module])
 
   const openDeliveryDetail = async row => {
     try {
@@ -451,7 +508,7 @@ function App() {
     setPage('login')
   }
 
-  const openScanner = (target = 'delivery') => {
+  const openScanner = (target = module) => {
     scannerTargetRef.current = target
     const nativeBridge = window.YodexNative
     if (nativeBridge && typeof nativeBridge.scanCode === 'function') {
@@ -518,12 +575,31 @@ function App() {
           rows={carLoadRows}
           selectedCarId={selectedCarId}
           selectedDriverId={selectedDriverId}
+          selectedHamalIds={selectedHamalIds}
+          sheetVisible={carLoadSheetVisible}
+          manualVisible={manualPickerVisible}
+          manualRows={manualRows}
+          manualSearchText={manualSearchText}
+          manualSelectedIds={manualSelectedIds}
+          manualLoading={manualLoading}
           loading={carLoadLoading}
           onModule={setModule}
           onBillText={setCarLoadBillText}
           onCar={setSelectedCarId}
           onDriver={setSelectedDriverId}
+          onHamalIds={setSelectedHamalIds}
+          onSheetVisible={setCarLoadSheetVisible}
+          onManualVisible={visible => {
+            setManualPickerVisible(visible)
+            if (visible && manualRows.length === 0) searchManualBills('')
+          }}
+          onManualSearchText={setManualSearchText}
+          onManualSelectedIds={setManualSelectedIds}
+          onManualSearch={searchManualBills}
+          onManualConfirm={addManualBills}
+          onRemoveRow={id => setCarLoadRows(rows => rows.filter(row => getValue(row, 'id', 'Id') !== id))}
           onScan={() => openScanner('carload')}
+          onAddBill={addCarLoadBill}
           onSubmit={submitCarLoad}
           logout={logout}
         />
@@ -596,10 +672,10 @@ function LoginPage({ onLogin }) {
 
 function ModuleSwitch({ active, onChange }) {
   return (
-    <div className="module-switch">
-      <button type="button" className={active === 'delivery' ? 'active' : ''} onClick={() => onChange('delivery')}>配送单</button>
-      <button type="button" className={active === 'carload' ? 'active' : ''} onClick={() => onChange('carload')}>扫码装车</button>
-    </div>
+    <TabBar className="module-tabbar" activeKey={active} onChange={onChange}>
+      <TabBar.Item key="delivery" title="配送单" icon={<EnvironmentOutline />} />
+      <TabBar.Item key="carload" title="扫码装车" icon={<ScanCodeOutline />} />
+    </TabBar>
   )
 }
 
@@ -612,12 +688,28 @@ function CarLoadPage(props) {
     rows,
     selectedCarId,
     selectedDriverId,
+    selectedHamalIds,
+    sheetVisible,
+    manualVisible,
+    manualRows,
+    manualSearchText,
+    manualSelectedIds,
+    manualLoading,
     loading,
     onModule,
     onBillText,
     onCar,
     onDriver,
+    onHamalIds,
+    onSheetVisible,
+    onManualVisible,
+    onManualSearchText,
+    onManualSelectedIds,
+    onManualSearch,
+    onManualConfirm,
+    onRemoveRow,
     onScan,
+    onAddBill,
     onSubmit,
     logout,
   } = props
@@ -631,16 +723,41 @@ function CarLoadPage(props) {
     label: getValue(driver, 'name', 'Name') || getValue(driver, 'code', 'Code') || getValue(driver, 'id', 'Id'),
     value: getValue(driver, 'id', 'Id'),
   })).filter(item => item.value)
+  const hamalOptions = drivers
+    .filter(driver => getValue(driver, 'id', 'Id') !== selectedDriverId)
+    .map(driver => ({
+      label: getValue(driver, 'name', 'Name') || getValue(driver, 'code', 'Code') || getValue(driver, 'id', 'Id'),
+      value: getValue(driver, 'id', 'Id'),
+    })).filter(item => item.value)
   const selectedCar = cars.find(car => getValue(car, 'id', 'Id') === selectedCarId)
   const changeCar = value => {
     const nextCarId = value[0] || ''
     onCar(nextCarId)
-    const nextCar = cars.find(car => getValue(car, 'id', 'Id') === nextCarId)
-    const nextDriverId = getValue(nextCar, 'driverID', 'driverId', 'DriverID')
-    if (nextDriverId && drivers.some(driver => getValue(driver, 'id', 'Id') === nextDriverId)) {
-      onDriver(nextDriverId)
-    }
   }
+  const changeDriver = value => {
+    const nextDriverId = value[0] || ''
+    onDriver(nextDriverId)
+    onHamalIds(selectedHamalIds.filter(id => id !== nextDriverId))
+  }
+  const changeHamals = value => {
+    if (value.length > 3) {
+      Toast.show('跟车员最多选择3人')
+      onHamalIds(value.slice(0, 3))
+      return
+    }
+    onHamalIds(value)
+  }
+  const totalQty = rows.reduce((sum, row) => sum + Number(getValue(row, 'quantity', 'Quantity') || 0), 0)
+  const manualOptions = manualRows.map(row => ({
+    value: getValue(row, 'id', 'Id'),
+    label: (
+      <div className="manual-option">
+        <b>{getValue(row, 'billCode', 'BillCode')}</b>
+        <span>{getValue(row, 'customerName', 'CustomerName') || '-'}</span>
+        <span>{getValue(row, 'routeName', 'RouteName') || '-'} · {fmt(getValue(row, 'quantity', 'Quantity'))}</span>
+      </div>
+    ),
+  })).filter(item => item.value)
 
   return (
     <div className="page-shell carload-shell">
@@ -654,63 +771,101 @@ function CarLoadPage(props) {
 
       <div className="content-list">
         <Card className="carload-panel">
-          <div className="carload-section-label">车辆</div>
-          <Selector
-            value={selectedCarId ? [selectedCarId] : []}
-            onChange={changeCar}
-            columns={2}
-            options={carOptions}
-          />
-          {selectedCar && (
-            <div className="carload-hint">线路：{getValue(selectedCar, 'deliveryAreaNames', 'DeliveryAreaNames') || '-'}</div>
-          )}
-
-          <div className="carload-section-label">司机</div>
-          <Selector
-            value={selectedDriverId ? [selectedDriverId] : []}
-            onChange={value => onDriver(value[0] || '')}
-            columns={2}
-            options={driverOptions}
-          />
-
           <div className="carload-section-label">发货单号</div>
           <div className="carload-scan-row">
             <SearchBar
               value={billText}
               onChange={onBillText}
-              onSearch={value => onSubmit(value)}
+              onSearch={value => onAddBill(value)}
               onClear={() => onBillText('')}
               placeholder="扫描/输入发货单号"
             />
+            <Button fill="outline" color="primary" className="manual-button" onClick={() => onManualVisible(true)}>选单</Button>
             <Button fill="outline" color="primary" className="scan-button" onClick={onScan}><ScanCodeOutline /></Button>
           </div>
-          <Button block color="primary" size="large" loading={loading} disabled={loading || !billText.trim()} onClick={() => onSubmit()}>
-            装车
-          </Button>
+          <div className="carload-hint">扫码或回车后先加入本次装车，确认无误后再统一装车。</div>
         </Card>
 
-        <div className="section-title">本次装车</div>
+        <div className="section-title">本次待装车</div>
         {rows.length === 0 ? (
-          <Empty description="扫描发货单后显示装车记录" />
+          <Empty description="扫描或手动选单后显示待装车单据" />
         ) : rows.map(row => (
-          <Card className="carload-result-card" key={getValue(row, 'carLoadBillID', 'carLoadBillId', 'CarLoadBillID')}>
+          <Card className="carload-result-card" key={getValue(row, 'id', 'Id')}>
             <div className="bill-title-row">
               <div>
-                <div className="bill-code">{getValue(row, 'sourceBillCode', 'SourceBillCode')}</div>
+                <div className="bill-code">{getValue(row, 'billCode', 'BillCode')}</div>
                 <div className="bill-sub">{getValue(row, 'customerName', 'CustomerName') || '-'}</div>
               </div>
-              <Tag color="success">已装车</Tag>
+              <Tag color="warning">待装车</Tag>
             </div>
             <div className="delivery-grid">
-              <Info label="装车单" value={getValue(row, 'carLoadBillCode', 'CarLoadBillCode')} />
-              <Info label="车辆" value={getValue(row, 'carName', 'CarName')} />
-              <Info label="司机" value={getValue(row, 'driverName', 'DriverName')} />
+              <Info label="日期" value={String(getValue(row, 'billDate', 'BillDate') || '').slice(0, 10)} />
+              <Info label="数量" value={fmt(getValue(row, 'quantity', 'Quantity'))} strong />
               <Info label="线路" value={getValue(row, 'routeName', 'RouteName') || '-'} />
             </div>
-            <div className="bill-sub carload-time">{getValue(row, 'loadedAt', 'LoadedAt')}</div>
+            <Button className="remove-row-button" size="small" fill="none" onClick={() => onRemoveRow(getValue(row, 'id', 'Id'))}>
+              <DeleteOutline /> 移除
+            </Button>
           </Card>
         ))}
       </div>
+
+      <div className="bottom-bar">
+        <div>合计：<span className="success-text">{rows.length}</span> 单 / <span className="success-text">{fmt(totalQty)}</span></div>
+        <Button color="primary" size="large" disabled={rows.length === 0} onClick={() => onSheetVisible(true)}>
+          装车
+        </Button>
+      </div>
+
+      <Popup visible={sheetVisible} position="bottom" bodyClassName="carload-action-popup" closeOnMaskClick onMaskClick={() => onSheetVisible(false)}>
+        <div className="carload-popup-body">
+          <div className="popup-title">选择装车信息</div>
+          <div className="carload-section-label">车辆</div>
+          <Selector value={selectedCarId ? [selectedCarId] : []} onChange={changeCar} columns={2} options={carOptions} />
+          {selectedCar && <div className="carload-hint">线路：{getValue(selectedCar, 'deliveryAreaNames', 'DeliveryAreaNames') || '-'}</div>}
+
+          <div className="carload-section-label">司机</div>
+          <Selector value={selectedDriverId ? [selectedDriverId] : []} onChange={changeDriver} columns={2} options={driverOptions} />
+
+          <div className="carload-section-label">跟车员</div>
+          <Selector multiple value={selectedHamalIds} onChange={changeHamals} columns={2} options={hamalOptions} />
+
+          <div className="popup-actions">
+            <Button block fill="outline" color="primary" onClick={() => onSheetVisible(false)}>取消</Button>
+            <Button block color="primary" loading={loading} disabled={loading} onClick={onSubmit}>确认装车</Button>
+          </div>
+        </div>
+      </Popup>
+
+      <Popup visible={manualVisible} position="right" bodyClassName="manual-picker-popup" destroyOnClose>
+        <NavBar backIcon={<LeftOutline />} onBack={() => onManualVisible(false)}>选择待装车单据</NavBar>
+        <div className="manual-picker-body">
+          <div className="manual-search-row">
+            <SearchBar
+              value={manualSearchText}
+              onChange={onManualSearchText}
+              onSearch={onManualSearch}
+              placeholder="搜索单号 / 客户 / 线路"
+            />
+            <Button color="primary" fill="outline" onClick={() => onManualSearch(manualSearchText)}>查询</Button>
+          </div>
+          {manualRows.length === 0 ? (
+            <Empty description={manualLoading ? '正在查询待装车单据' : '暂无待装车单据'} />
+          ) : (
+            <Selector
+              multiple
+              value={manualSelectedIds}
+              onChange={onManualSelectedIds}
+              columns={1}
+              options={manualOptions}
+            />
+          )}
+        </div>
+        <div className="bottom-bar">
+          <div>已选：<span className="success-text">{manualSelectedIds.length}</span> 单</div>
+          <Button color="primary" size="large" disabled={manualSelectedIds.length === 0} onClick={onManualConfirm}>带入本次装车</Button>
+        </div>
+      </Popup>
     </div>
   )
 }
