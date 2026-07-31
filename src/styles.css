@@ -366,6 +366,19 @@ select,
   background: #fff;
   border-top: 1px solid #eee;
 }
+.detail-bottom-bar {
+  grid-template-columns: minmax(0, 1fr) auto minmax(128px, 1fr);
+}
+.detail-bottom-bar.completed {
+  grid-template-columns: 1fr 1fr;
+}
+.cancel-dispatch-button {
+  --text-color: #8b93a1;
+  height: 32px;
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 400;
+}
 .complete-summary {
   margin: 10px 8px 8px;
 }

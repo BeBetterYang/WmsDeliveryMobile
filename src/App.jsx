@@ -523,6 +523,32 @@ function App() {
     }
   }
 
+  const cancelDelivery = async () => {
+    if (!activeDelivery) return
+    const confirmed = await Dialog.confirm({
+      title: '确认取消配送',
+      content: `确定取消单据 ${activeDelivery.billCode} 的配送吗？`,
+      confirmText: '确认取消',
+      cancelText: '返回',
+    })
+    if (!confirmed) return
+    try {
+      await api(`/api/deliveries/${encodeURIComponent(activeDelivery.id)}/cancel-dispatch`, {
+        method: 'POST',
+        body: JSON.stringify({ loginId: operator.loginID }),
+      })
+      Toast.show({ icon: 'success', content: '已取消配送' })
+      setActiveDelivery(null)
+      setStatusFilter(['undelivered'])
+      setPage('list')
+      await loadDeliverySummary()
+      await loadRoutes()
+      await loadDeliveries({ status: 'undelivered' })
+    } catch (err) {
+      Toast.show({ icon: 'fail', content: err.message })
+    }
+  }
+
   const logout = async () => {
     const confirmed = await Dialog.confirm({
       title: '确认退出',
@@ -643,6 +669,7 @@ function App() {
           delivery={activeDelivery}
           onBack={() => setPage('list')}
           onComplete={() => setPage('complete')}
+          onCancel={cancelDelivery}
         />
       )}
       {page === 'complete' && activeDelivery && (
@@ -1077,7 +1104,7 @@ function DeliveryListPage(props) {
   )
 }
 
-function DeliveryDetailPage({ delivery, onBack, onComplete }) {
+function DeliveryDetailPage({ delivery, onBack, onComplete, onCancel }) {
   const productCount = delivery.products.reduce((sum, row) => sum + Number(row.quantity || 0), 0)
   const isCompleted = delivery.deliveryStatus === 'completed' || Number(delivery.backState || 0) === 1
   return (
@@ -1130,8 +1157,13 @@ function DeliveryDetailPage({ delivery, onBack, onComplete }) {
         ))}
       </div>
 
-      <div className="bottom-bar">
+      <div className={`bottom-bar detail-bottom-bar${isCompleted ? ' completed' : ''}`}>
         <div>合计：<span className="success-text">{fmt(productCount)}</span></div>
+        {!isCompleted && (
+          <Button fill="none" className="cancel-dispatch-button" onClick={onCancel}>
+            取消配送
+          </Button>
+        )}
         <Button color="primary" size="large" disabled={isCompleted} onClick={onComplete}>
           {isCompleted ? '已配送' : '配送完成'}
         </Button>

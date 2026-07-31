@@ -595,6 +595,119 @@ app.MapPost("/api/deliveries/{sourceBillId}/complete", async (string sourceBillI
     }
 });
 
+app.MapPost("/api/deliveries/{sourceBillId}/cancel-dispatch", async (string sourceBillId, CancelDeliveryRequest request) =>
+{
+    if (string.IsNullOrWhiteSpace(request.LoginId))
+    {
+        return Results.BadRequest(new { message = "缺少登录用户" });
+    }
+
+    await using var conn = new SqlConnection(connectionString);
+    await conn.OpenAsync();
+    await using var tx = await conn.BeginTransactionAsync();
+    try
+    {
+        string carLoadBillId;
+        string billCode;
+        await using (var billCmd = conn.CreateCommand())
+        {
+            billCmd.Transaction = (SqlTransaction)tx;
+            billCmd.CommandText = """
+                SELECT TOP 1
+                    BillCode,
+                    ISNULL(CarLoadBillID,'') AS CarLoadBillID,
+                    ISNULL(DispatchBackState,0) AS DispatchBackState
+                FROM dbo.Wlt_Wms_SourceBillIndex WITH (UPDLOCK, HOLDLOCK)
+                WHERE BillID=@SourceBillID AND Deleted=0
+                """;
+            AddString(billCmd, "@SourceBillID", sourceBillId);
+            await using var reader = await billCmd.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+            {
+                await tx.RollbackAsync();
+                return Results.NotFound(new { message = "配送单不存在" });
+            }
+
+            billCode = ReadString(reader, "BillCode");
+            carLoadBillId = ReadString(reader, "CarLoadBillID");
+            if (ReadInt(reader, "DispatchBackState") == 1)
+            {
+                await tx.RollbackAsync();
+                return Results.BadRequest(new { message = "该单据已配送完成，不能取消配送" });
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(carLoadBillId))
+        {
+            await tx.RollbackAsync();
+            return Results.BadRequest(new { message = "该单据未处于配送中，无需取消" });
+        }
+
+        await using (var existsCmd = conn.CreateCommand())
+        {
+            existsCmd.Transaction = (SqlTransaction)tx;
+            existsCmd.CommandText = """
+                SELECT COUNT(1)
+                FROM dbo.Wlt_Wms_CarLoadBillBody
+                WHERE BillID=@BillID AND SourceBillID=@SourceBillID
+                """;
+            AddString(existsCmd, "@BillID", carLoadBillId);
+            AddString(existsCmd, "@SourceBillID", sourceBillId);
+            var bodyCount = Convert.ToInt32(await existsCmd.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+            if (bodyCount == 0)
+            {
+                await tx.RollbackAsync();
+                return Results.BadRequest(new { message = "未找到该单据的配送装车记录" });
+            }
+        }
+
+        await using (var cancelCmd = conn.CreateCommand())
+        {
+            cancelCmd.Transaction = (SqlTransaction)tx;
+            cancelCmd.CommandText = """
+                UPDATE dbo.Wlt_Wms_SourceBillIndex
+                SET CarLoadStatus=0,
+                    CarLoadBillID='',
+                    DispatchLoginID='',
+                    DispatchTime='',
+                    DispatchState=0,
+                    CarrierID='',
+                    WayBillCode=''
+                WHERE BillID=@SourceBillID AND Deleted=0;
+
+                DELETE FROM dbo.Wlt_Wms_CarLoadUser
+                WHERE SourceBillID=@SourceBillID AND CarLoadBillID=@BillID;
+
+                DELETE FROM dbo.Wlt_Wms_CarLoadBillBody
+                WHERE SourceBillID=@SourceBillID AND BillID=@BillID;
+
+                UPDATE dbo.Wlt_Wms_CarLoadBillIndex
+                SET CarLoadSumQty=(SELECT SUM(CarLoadQty) FROM dbo.Wlt_Wms_CarLoadBillBody WHERE BillID=@BillID)
+                WHERE BillID=@BillID;
+
+                IF NOT EXISTS(SELECT 1 FROM dbo.Wlt_Wms_CarLoadBillBody WHERE BillID=@BillID)
+                BEGIN
+                    UPDATE dbo.Wlt_Wms_CarLoadBillIndex SET Deleted=1 WHERE BillID=@BillID;
+                END
+                """;
+            AddString(cancelCmd, "@SourceBillID", sourceBillId);
+            AddString(cancelCmd, "@BillID", carLoadBillId);
+            await cancelCmd.ExecuteNonQueryAsync();
+        }
+
+        await UpdateCarLoadDeliveryAreas(conn, (SqlTransaction)tx, carLoadBillId);
+        await UpdateCarLoadShippers(conn, (SqlTransaction)tx, carLoadBillId);
+
+        await tx.CommitAsync();
+        return Results.Ok(new { ok = true, billCode });
+    }
+    catch
+    {
+        await tx.RollbackAsync();
+        throw;
+    }
+});
+
 app.MapGet("/api/carload/options", async () =>
 {
     await using var conn = new SqlConnection(connectionString);
@@ -1541,6 +1654,44 @@ static string JoinNonEmptyDistinct(IEnumerable<string> values) =>
         .Select(value => value.Trim())
         .Distinct(StringComparer.OrdinalIgnoreCase));
 
+static async Task UpdateCarLoadDeliveryAreas(SqlConnection conn, SqlTransaction tx, string carLoadBillId)
+{
+    var ids = new List<string>();
+    var names = new List<string>();
+    await using (var queryCmd = conn.CreateCommand())
+    {
+        queryCmd.Transaction = tx;
+        queryCmd.CommandText = """
+            SELECT DISTINCT
+                ISNULL(DA.DeliveryAreaID,'') AS DeliveryAreaID,
+                ISNULL(DA.DeliveryAreaName,'') AS DeliveryAreaName
+            FROM dbo.Wlt_Wms_CarLoadBillBody CLB
+            LEFT JOIN dbo.Wlt_Wms_DeliveryAreaInfo DA ON DA.DeliveryAreaID=CLB.DeliveryAreaID
+            WHERE CLB.BillID=@BillID
+            """;
+        AddString(queryCmd, "@BillID", carLoadBillId);
+        await using var reader = await queryCmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            ids.Add(ReadString(reader, "DeliveryAreaID"));
+            names.Add(ReadString(reader, "DeliveryAreaName"));
+        }
+    }
+
+    await using var indexCmd = conn.CreateCommand();
+    indexCmd.Transaction = tx;
+    indexCmd.CommandText = """
+        UPDATE dbo.Wlt_Wms_CarLoadBillIndex
+        SET DeliveryAreaIDs=@DeliveryAreaIDs,
+            DeliveryAreaNames=@DeliveryAreaNames
+        WHERE BillID=@BillID
+        """;
+    AddString(indexCmd, "@DeliveryAreaIDs", JoinNonEmptyDistinct(ids));
+    AddString(indexCmd, "@DeliveryAreaNames", JoinNonEmptyDistinct(names));
+    AddString(indexCmd, "@BillID", carLoadBillId);
+    await indexCmd.ExecuteNonQueryAsync();
+}
+
 static bool IsCarLoadable(CarLoadSourceBill source)
 {
     return !source.SyncSource.Equals("qimen", StringComparison.OrdinalIgnoreCase)
@@ -2049,6 +2200,7 @@ static decimal? ReadNullableDecimal(SqlDataReader reader, string name)
 }
 
 record LoginRequest(string Login, string Password);
+record CancelDeliveryRequest(string LoginId);
 record UserDto(string LoginID, string LoginCode, string LoginName, string Mobile);
 record DeliveryDto(
     string Id,
