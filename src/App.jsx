@@ -113,7 +113,7 @@ const buildAmapUrl = row => {
     if (hasCoordinate) {
       return `iosamap://navi?sourceApplication=wms-delivery&poiname=${encodedAddress}&lat=${latitude}&lon=${longitude}&dev=0&style=2`
     }
-    return `iosamap://poi?sourceApplication=wms-delivery&keywords=${encodedAddress}&dev=0`
+    return `iosamap://poi?sourceApplication=wms-delivery&name=${encodedAddress}&dev=0`
   }
   if (hasCoordinate) {
     return `intent://navi?sourceApplication=wms-delivery&poiname=${encodeURIComponent(address)}&lat=${latitude}&lon=${longitude}&dev=0&style=2#Intent;scheme=androidamap;package=com.autonavi.minimap;end`
