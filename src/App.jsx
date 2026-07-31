@@ -590,6 +590,10 @@ function App() {
 
   const openScanner = (target = module) => {
     scannerTargetRef.current = target
+    const activeElement = document.activeElement
+    if (activeElement && typeof activeElement.blur === 'function') {
+      activeElement.blur()
+    }
     const nativeBridge = window.YodexNative
     if (nativeBridge && typeof nativeBridge.scanCode === 'function') {
       nativeBridge.scanCode()
@@ -1548,8 +1552,8 @@ function ScannerPopup({ visible, onClose, onScan }) {
 
       const videoWidth = video.videoWidth
       const videoHeight = video.videoHeight
-      const cropWidth = Math.round(videoWidth * 0.82)
-      const cropHeight = Math.round(videoHeight * 0.42)
+      const cropWidth = Math.min(Math.round(videoWidth * 0.88), 1280)
+      const cropHeight = Math.min(Math.round(videoHeight * 0.62), Math.round(cropWidth * 0.54))
       const sourceX = Math.round((videoWidth - cropWidth) / 2)
       const sourceY = Math.round((videoHeight - cropHeight) / 2)
       const targetWidth = Math.min(960, cropWidth)
@@ -1622,10 +1626,12 @@ function ScannerPopup({ visible, onClose, onScan }) {
     <Popup visible={visible} position="right" bodyClassName="scanner-popup" destroyOnClose>
       <NavBar onBack={closeScanner}>扫码</NavBar>
       <div className="scanner-stage">
-        <video ref={videoRef} className="scanner-video" autoPlay muted playsInline />
-        <canvas ref={canvasRef} className="scanner-canvas" />
-        <input ref={fileInputRef} className="scanner-file-input" type="file" accept="image/*" capture="environment" onChange={decodeImageFile} />
-        <div className="scanner-frame" />
+        <div className="scanner-camera-panel">
+          <video ref={videoRef} className="scanner-video" autoPlay muted playsInline />
+          <canvas ref={canvasRef} className="scanner-canvas" />
+          <input ref={fileInputRef} className="scanner-file-input" type="file" accept="image/*" capture="environment" onChange={decodeImageFile} />
+          <div className="scanner-frame" />
+        </div>
         <div className="scanner-tip">
           <div>{scannerError || scannerStatus}</div>
           <div className="scanner-actions">
