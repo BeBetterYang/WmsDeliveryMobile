@@ -85,15 +85,40 @@ const queryString = params => {
   })
   return search.toString()
 }
+const parseCoordinate = value => {
+  if (value === undefined || value === null) return null
+  const text = String(value).trim()
+  if (!text) return null
+  const number = Number(text)
+  return Number.isFinite(number) ? number : null
+}
+const isIOSDevice = () => {
+  const ua = window.navigator.userAgent || ''
+  return /iPad|iPhone|iPod/.test(ua) || (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1)
+}
 const buildAmapUrl = row => {
   const address = row.address?.trim()
   if (!address) return ''
-  const longitude = Number(row.customerLongitude)
-  const latitude = Number(row.customerLatitude)
-  if (Number.isFinite(longitude) && Number.isFinite(latitude)) {
+  const encodedAddress = encodeURIComponent(address)
+  const longitude = parseCoordinate(row.customerLongitude)
+  const latitude = parseCoordinate(row.customerLatitude)
+  const hasCoordinate = longitude !== null
+    && latitude !== null
+    && longitude >= -180
+    && longitude <= 180
+    && latitude >= -90
+    && latitude <= 90
+    && !(longitude === 0 && latitude === 0)
+  if (isIOSDevice()) {
+    if (hasCoordinate) {
+      return `iosamap://navi?sourceApplication=wms-delivery&poiname=${encodedAddress}&lat=${latitude}&lon=${longitude}&dev=0&style=2`
+    }
+    return `iosamap://poi?sourceApplication=wms-delivery&keywords=${encodedAddress}&dev=0`
+  }
+  if (hasCoordinate) {
     return `intent://navi?sourceApplication=wms-delivery&poiname=${encodeURIComponent(address)}&lat=${latitude}&lon=${longitude}&dev=0&style=2#Intent;scheme=androidamap;package=com.autonavi.minimap;end`
   }
-  return `intent://poi?sourceApplication=wms-delivery&keywords=${encodeURIComponent(address)}&dev=0#Intent;scheme=androidamap;package=com.autonavi.minimap;end`
+  return `intent://poi?sourceApplication=wms-delivery&keywords=${encodedAddress}&dev=0#Intent;scheme=androidamap;package=com.autonavi.minimap;end`
 }
 
 const loadImage = src => new Promise((resolve, reject) => {
