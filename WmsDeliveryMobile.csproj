@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <Content Remove="deploy\**\*" />
+    <Content Remove="android-shell\**\*" />
     <Content Remove="node_modules\**\*" />
     <Content Remove="src\**\*" />
     <Content Remove="UserData\**\*" />
@@ -25,6 +26,7 @@
     <Content Remove="server.log" />
     <Content Remove="vite.config.js" />
     <None Remove="deploy\**\*" />
+    <None Remove="android-shell\**\*" />
     <None Remove="node_modules\**\*" />
     <None Remove="src\**\*" />
     <None Remove="UserData\**\*" />
